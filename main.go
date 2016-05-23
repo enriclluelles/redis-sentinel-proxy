@@ -81,7 +81,7 @@ func proxy(local io.ReadWriteCloser, remoteAddr *net.TCPAddr) {
 func getMasterAddr(sentinelAddress *net.TCPAddr, masterName string) (*net.TCPAddr, error) {
 	conn, err := net.DialTCP("tcp", nil, sentinelAddress)
 	if err != nil {
-		log.Fatal("Error connecting to sentinel: %s", err)
+		return nil, err
 	}
 
 	defer conn.Close()
@@ -110,7 +110,10 @@ func getMasterAddr(sentinelAddress *net.TCPAddr, masterName string) (*net.TCPAdd
 	}
 
 	//check that there's actually someone listening on that address
-	_, err = net.DialTCP("tcp", nil, addr)
+	conn2, err := net.DialTCP("tcp", nil, addr)
+	if err == nil {
+		defer conn2.Close()
+	}
 
 	return addr, err
 }
