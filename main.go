@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -17,7 +18,7 @@ var (
 
 	localAddr    = flag.String("listen", ":9999", "local address")
 	sentinelAddr = flag.String("sentinel", ":26379", "remote address")
-	masterName   = flag.String("master", "mymaster", "name of the master redis node")
+	masterName   = flag.String("master", "", "name of the master redis node")
 )
 
 func main() {
@@ -55,7 +56,7 @@ func master() {
 	for {
 		masterAddr, err = getMasterAddr(saddr, *masterName)
 		if err != nil {
-			log.Fatal(err)
+			log.Println(err)
 		}
 		time.Sleep(1 * time.Second)
 	}
@@ -95,8 +96,21 @@ func getMasterAddr(sentinelAddress *net.TCPAddr, masterName string) (*net.TCPAdd
 
 	parts := strings.Split(string(b), "\r\n")
 
+	if len(parts) < 5 {
+		err = errors.New("Couldn't get master address from sentinel")
+		return nil, err
+	}
+
 	//getting the string address for the master node
 	stringaddr := fmt.Sprintf("%s:%s", parts[2], parts[4])
 	addr, err := net.ResolveTCPAddr("tcp", stringaddr)
+
+	if err != nil {
+		return nil, err
+	}
+
+	//check that there's actually someone listening on that address
+	_, err = net.DialTCP("tcp", nil, addr)
+
 	return addr, err
 }
