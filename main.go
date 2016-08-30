@@ -13,24 +13,28 @@ import (
 
 var (
 	masterAddr *net.TCPAddr
-	raddr      *net.TCPAddr
-	saddr      *net.TCPAddr
+	saddrs     []*net.TCPAddr
 
-	localAddr    = flag.String("listen", ":9999", "local address")
-	sentinelAddr = flag.String("sentinel", ":26379", "remote address")
-	masterName   = flag.String("master", "", "name of the master redis node")
+	localAddr     = flag.String("listen", ":9999", "local address")
+	sentinelAddrs = flag.String("sentinel", ":26379", "List of remote address, separated by coma")
+	masterName    = flag.String("master", "", "name of the master redis node")
 )
 
 func main() {
 	flag.Parse()
 
+	sentinels := strings.Split(*sentinelAddrs, ",")
+
 	laddr, err := net.ResolveTCPAddr("tcp", *localAddr)
 	if err != nil {
 		log.Fatal("Failed to resolve local address: %s", err)
 	}
-	saddr, err = net.ResolveTCPAddr("tcp", *sentinelAddr)
-	if err != nil {
-		log.Fatal("Failed to resolve sentinel address: %s", err)
+	for _, sentinel := range sentinels {
+		saddr, err := net.ResolveTCPAddr("tcp", sentinel)
+		if err != nil {
+			log.Fatal("Failed to resolve sentinel address: %s", err)
+		}
+		saddrs = append(saddrs, saddr)
 	}
 
 	go master()
@@ -52,11 +56,22 @@ func main() {
 }
 
 func master() {
-	var err error
 	for {
-		masterAddr, err = getMasterAddr(saddr, *masterName)
-		if err != nil {
-			log.Println(err)
+		for _, saddr := range saddrs {
+			result_channel := make(chan *net.TCPAddr, 1)
+			go func(saddr *net.TCPAddr) {
+				master, err := getMasterAddr(saddr, *masterName)
+				if err != nil {
+					log.Println(err)
+				}
+				result_channel <- master
+			}(saddr)
+			select {
+			case result := <-result_channel:
+				masterAddr = result
+			case <-time.After(time.Second * 2):
+				log.Println("Sentinel timed out")
+			}
 		}
 		time.Sleep(1 * time.Second)
 	}
