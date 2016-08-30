@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"strings"
 	"time"
 )
@@ -18,10 +19,22 @@ var (
 	localAddr     = flag.String("listen", ":9999", "local address")
 	sentinelAddrs = flag.String("sentinel", ":26379", "List of remote address, separated by coma")
 	masterName    = flag.String("master", "", "name of the master redis node")
+	pidFile       = flag.String("pidfile", "", "Location of the pid file")
 )
 
 func main() {
 	flag.Parse()
+
+	if *pidFile != "" {
+		f, err := os.Create(*pidFile)
+		if err != nil {
+			log.Fatalf("Unable to create pidfile: %s", err)
+		}
+
+		fmt.Fprintf(f, "%d\n", os.Getpid())
+
+		f.Close()
+	}
 
 	sentinels := strings.Split(*sentinelAddrs, ",")
 
