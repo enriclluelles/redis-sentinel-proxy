@@ -1,4 +1,4 @@
-FROM alpine:3.4
+FROM golang:1.10
 MAINTAINER Andrey Kolashtov <andrey.kolashtov@flant.com>
 
 RUN go build . -o redis-sentinel-proxy
