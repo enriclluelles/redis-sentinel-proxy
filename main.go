@@ -19,6 +19,8 @@ var (
 	localAddr    = flag.String("listen", ":9999", "local address")
 	sentinelAddr = flag.String("sentinel", ":26379", "remote address")
 	masterName   = flag.String("master", "", "name of the master redis node")
+	password     = flag.String("password", "", "password (if any) to authenticate")
+	debug   	 = flag.Bool("debug", false, "sets debug mode")
 )
 
 func main() {
@@ -54,7 +56,7 @@ func main() {
 func master() {
 	var err error
 	for {
-		masterAddr, err = getMasterAddr(saddr, *masterName)
+		masterAddr, err = getMasterAddr(saddr, *masterName, *password)
 		if err != nil {
 			log.Println(err)
 		}
@@ -78,7 +80,7 @@ func proxy(local io.ReadWriteCloser, remoteAddr *net.TCPAddr) {
 	go pipe(remote, local)
 }
 
-func getMasterAddr(sentinelAddress *net.TCPAddr, masterName string) (*net.TCPAddr, error) {
+func getMasterAddr(sentinelAddress *net.TCPAddr, masterName string, password string) (*net.TCPAddr, error) {
 	conn, err := net.DialTCP("tcp", nil, sentinelAddress)
 	if err != nil {
 		return nil, err
@@ -86,6 +88,22 @@ func getMasterAddr(sentinelAddress *net.TCPAddr, masterName string) (*net.TCPAdd
 
 	defer conn.Close()
 
+	if len(password) > 0 {
+		conn.Write([]byte(fmt.Sprintf("AUTH %s\n", password)))
+		if *debug {
+			fmt.Println("> AUTH ", password)
+		}
+		authResp := make([]byte, 256)
+		_, err = conn.Read(authResp)
+
+		if *debug {
+			fmt.Println("< ", string(authResp))
+		}
+	}
+
+	if *debug {
+		fmt.Println("> sentinel get-master-addr-by-name ", masterName)
+	}
 	conn.Write([]byte(fmt.Sprintf("sentinel get-master-addr-by-name %s\n", masterName)))
 
 	b := make([]byte, 256)
@@ -95,9 +113,12 @@ func getMasterAddr(sentinelAddress *net.TCPAddr, masterName string) (*net.TCPAdd
 	}
 
 	parts := strings.Split(string(b), "\r\n")
+	if *debug {
+		fmt.Println("< ", string(b))
+	}
 
 	if len(parts) < 5 {
-		err = errors.New("Couldn't get master address from sentinel")
+		err = errors.New(fmt.Sprintf("Couldn't get master address from sentinel: %s", string(b)))
 		return nil, err
 	}
 
