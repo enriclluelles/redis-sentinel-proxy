@@ -102,7 +102,7 @@ func getMasterAddr(sentinelAddress *net.TCPAddr, masterName string) (*net.TCPAdd
 	}
 
 	//getting the string address for the master node
-	stringaddr := fmt.Sprintf("%s:%s", parts[2], parts[4])
+	stringaddr := fmt.Sprintf("[%s]:%s", parts[2], parts[4])
 	addr, err := net.ResolveTCPAddr("tcp", stringaddr)
 
 	if err != nil {
