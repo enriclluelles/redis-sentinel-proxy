@@ -4,7 +4,7 @@ LABEL Andrey Kolashtov <andrey.kolashtov@flant.com>
 ADD . /redis-sentinel-proxy/
 WORKDIR /redis-sentinel-proxy
 RUN go mod init redis-sentinel-proxy && \
-    go build -o redis-sentinel-proxy .
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o redis-sentinel-proxy .
 
 FROM alpine:3.14
 
