@@ -1,14 +1,18 @@
-FROM golang:1.17 AS builder
+FROM golang:1.20 AS builder
 LABEL Andrey Kolashtov <andrey.kolashtov@flant.com>
 
-ADD . /redis-sentinel-proxy/
-WORKDIR /redis-sentinel-proxy
-RUN go mod init redis-sentinel-proxy && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o redis-sentinel-proxy .
+WORKDIR /src
+COPY go.mod go.sum /src/
+RUN go mod download
 
-FROM alpine:3.14
+COPY main.go Makefile /src/
+COPY pkg /src/pkg
 
-COPY --from=builder /redis-sentinel-proxy/redis-sentinel-proxy /usr/local/bin/redis-sentinel-proxy
+RUN make build CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+
+FROM alpine:3.17
+
+COPY --from=builder /src/bin/redis-sentinel-proxy /usr/local/bin/redis-sentinel-proxy
 RUN apk --update --no-cache add redis
 
 ENTRYPOINT ["/usr/local/bin/redis-sentinel-proxy"]
