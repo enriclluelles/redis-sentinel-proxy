@@ -24,7 +24,7 @@ var _ = Describe("redis-sentinel-proxy :: tests", func() {
 
 	AfterEach(func() {
 		defer rmClient.Close()
-		defer rmClient.Close()
+		defer rspClient.Close()
 	})
 
 	Context("ping-pong RSP", func() {
