@@ -1,0 +1,63 @@
+version: '3.9'
+
+services:
+  redis-sentinel-proxy-tests:
+    build:
+      context: ./redis_sentinel_proxy_test
+    command: ["go test ./..."]
+    depends_on:
+      - redis-sentinel-proxy
+    networks:
+      - redis-test
+
+  redis-sentinel-proxy:
+    build:
+      context: ../
+    command:
+      - --listen=:9999
+      - --sentinel=redis-sentinel:26379
+      - --master=redismaster
+      - --resolve-retries=10
+    ports:
+     - 9999:9999
+    depends_on:
+      - redis-master
+      - redis-sentinel
+    networks:
+      - redis-test
+
+  redis-master:
+    image: redis:7.0.5
+    networks:
+      - redis-test
+    ports:
+      - 6379:6379
+
+  redis-slave:
+    image: redis:7.0.5
+    command:
+      - redis-server
+      - --slaveof
+      - redis-master
+      - "6379"
+    networks:
+      - redis-test
+    depends_on:
+      - redis-master
+    deploy:
+      replicas: 2
+
+  redis-sentinel:
+    build:
+      context: ./redis_sentinel
+    networks:
+      - redis-test
+    depends_on:
+      - redis-master
+    deploy:
+      replicas: 1
+
+
+networks:
+  redis-test:
+    name: redis-test

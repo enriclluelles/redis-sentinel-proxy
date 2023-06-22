@@ -1,120 +1,60 @@
 package main
 
 import (
-	"errors"
+	"context"
 	"flag"
-	"fmt"
-	"io"
 	"log"
 	"net"
-	"strings"
-	"time"
-)
+	"os"
+	"os/signal"
+	"syscall"
 
-var (
-	masterAddr *net.TCPAddr
-	raddr      *net.TCPAddr
-	saddr      *net.TCPAddr
-
-	localAddr    = flag.String("listen", ":9999", "local address")
-	sentinelAddr = flag.String("sentinel", ":26379", "remote address")
-	masterName   = flag.String("master", "", "name of the master redis node")
+	masterresolver "github.com/flant/redis-sentinel-proxy/pkg/master_resolver"
+	"github.com/flant/redis-sentinel-proxy/pkg/proxy"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
+	var (
+		localAddr            = ":9999"
+		sentinelAddr         = ":26379"
+		masterName           = "mymaster"
+		masterResolveRetries = 3
+	)
+
+	flag.StringVar(&localAddr, "listen", localAddr, "local address")
+	flag.StringVar(&sentinelAddr, "sentinel", sentinelAddr, "remote address")
+	flag.StringVar(&masterName, "master", masterName, "name of the master redis node")
+	flag.IntVar(&masterResolveRetries, "resolve-retries", masterResolveRetries, "number of consecutive retries of the redis master node resolve")
 	flag.Parse()
 
-	laddr, err := net.ResolveTCPAddr("tcp", *localAddr)
-	if err != nil {
-		log.Fatal("Failed to resolve local address: %s", err)
+	if err := runProxying(localAddr, sentinelAddr, masterName, masterResolveRetries); err != nil {
+		log.Fatalln(err)
 	}
-	saddr, err = net.ResolveTCPAddr("tcp", *sentinelAddr)
-	if err != nil {
-		log.Fatal("Failed to resolve sentinel address: %s", err)
-	}
-
-	go master()
-
-	listener, err := net.ListenTCP("tcp", laddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for {
-		conn, err := listener.AcceptTCP()
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-
-		go proxy(conn, masterAddr)
-	}
+	log.Println("Exiting...")
 }
 
-func master() {
-	var err error
-	for {
-		masterAddr, err = getMasterAddr(saddr, *masterName)
-		if err != nil {
-			log.Println(err)
-		}
-		time.Sleep(1 * time.Second)
-	}
+func runProxying(localAddr, sentinelAddr, masterName string, masterResolveRetries int) error {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	laddr := resolveTCPAddr(localAddr)
+	saddr := resolveTCPAddr(sentinelAddr)
+
+	masterAddrResolver := masterresolver.NewRedisMasterResolver(masterName, saddr, masterResolveRetries)
+	rsp := proxy.NewRedisSentinelProxy(laddr, masterAddrResolver)
+
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error { return masterAddrResolver.UpdateMasterAddressLoop(ctx) })
+	eg.Go(func() error { return rsp.Run(ctx) })
+
+	return eg.Wait()
 }
 
-func pipe(r io.Reader, w io.WriteCloser) {
-	io.Copy(w, r)
-	w.Close()
-}
-
-func proxy(local io.ReadWriteCloser, remoteAddr *net.TCPAddr) {
-	d := net.Dialer{Timeout: 1 * time.Second}
-	remote, err := d.Dial("tcp", remoteAddr.String())
+func resolveTCPAddr(addr string) *net.TCPAddr {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
-		log.Println(err)
-		local.Close()
-		return
+		log.Fatalf("Failed resolving tcp address: %s", err)
 	}
-	go pipe(local, remote)
-	go pipe(remote, local)
-}
-
-func getMasterAddr(sentinelAddress *net.TCPAddr, masterName string) (*net.TCPAddr, error) {
-	conn, err := net.DialTCP("tcp", nil, sentinelAddress)
-	if err != nil {
-		return nil, err
-	}
-
-	defer conn.Close()
-
-	conn.Write([]byte(fmt.Sprintf("sentinel get-master-addr-by-name %s\n", masterName)))
-
-	b := make([]byte, 256)
-	_, err = conn.Read(b)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	parts := strings.Split(string(b), "\r\n")
-
-	if len(parts) < 5 {
-		err = errors.New("Couldn't get master address from sentinel")
-		return nil, err
-	}
-
-	//getting the string address for the master node
-	stringaddr := fmt.Sprintf("%s:%s", parts[2], parts[4])
-	addr, err := net.ResolveTCPAddr("tcp", stringaddr)
-
-	if err != nil {
-		return nil, err
-	}
-
-	//check that there's actually someone listening on that address
-	conn2, err := net.DialTCP("tcp", nil, addr)
-	if err == nil {
-		defer conn2.Close()
-	}
-
-	return addr, err
+	return tcpAddr
 }
