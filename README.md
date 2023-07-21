@@ -14,4 +14,4 @@ Usage:
 testing
 ============
 - install `docker` and `docker-compose`.
-- run `make test`
+- run `make tests-unit tests-intergration`

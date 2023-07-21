@@ -4,7 +4,7 @@ services:
   redis-sentinel-proxy-tests:
     build:
       context: ./redis_sentinel_proxy_test
-    command: ["go test ./..."]
+    command: ["go test -v ./..."]
     depends_on:
       - redis-sentinel-proxy
     networks:
