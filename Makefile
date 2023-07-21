@@ -2,10 +2,13 @@ GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
 CGO_ENABLED ?= 0
 
-.PHONY: test
-test:
-	go test -v ./...
+.PHONY: tests-intergration
+tests-intergration:
 	cd test && ./test.sh
+
+.PHONY: tests-unit
+tests-unit:
+	CGO_ENABLED=1 go test -v -race -cover ./...
 
 .PHONY: build
 build:

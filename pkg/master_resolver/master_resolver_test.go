@@ -16,7 +16,7 @@ func Test_redisMasterFromSentinelAddr(t *testing.T) {
 		masterName      string
 	}
 
-	mockServerAddr := &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 12700}
+	mockServerAddr := &net.TCPAddr{IP: net.IPv4(0, 0, 0, 0), Port: 12700}
 	tests := []struct {
 		name    string
 		args    args
@@ -25,9 +25,9 @@ func Test_redisMasterFromSentinelAddr(t *testing.T) {
 	}{
 		{
 			name: "all is ok",
-			want: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 12700},
+			want: mockServerAddr,
 			args: args{
-				sentinelAddress: mockServerAddr,
+				sentinelAddress: &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 12700},
 				masterName:      "test-master",
 			},
 		},
