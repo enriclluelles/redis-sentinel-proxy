@@ -57,20 +57,18 @@ func (r *RedisSentinelProxy) runListenLoop(ctx context.Context, listener *net.TC
 }
 
 func (r *RedisSentinelProxy) proxy(incoming io.ReadWriteCloser) {
-	defer incoming.Close()
-
 	remote, err := utils.TCPConnectWithTimeout(r.masterResolver.MasterAddress())
 	if err != nil {
+		defer incoming.Close()
 		log.Printf("Error connecting to master: %s", err)
 		return
 	}
-	defer remote.Close()
 
 	sigChan := make(chan struct{})
 	defer close(sigChan)
 
-	go pipe(remote, incoming, sigChan)
 	go pipe(incoming, remote, sigChan)
+	go pipe(remote, incoming, sigChan)
 
 	<-sigChan
 	<-sigChan
@@ -84,6 +82,7 @@ func closeListenerByContext(ctx context.Context, listener *net.TCPListener) erro
 
 func pipe(w io.WriteCloser, r io.Reader, sigChan chan<- struct{}) {
 	defer func() { sigChan <- struct{}{} }()
+	defer w.Close()
 
 	if _, err := io.Copy(w, r); err != nil {
 		log.Printf("Error writing content: %s", err)
