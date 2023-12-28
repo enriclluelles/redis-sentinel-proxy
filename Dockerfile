@@ -8,7 +8,7 @@ RUN go mod download
 COPY main.go Makefile /src/
 COPY pkg /src/pkg
 
-RUN make build CGO_ENABLED=0 GOOS=linux GOARCH=amd64
+RUN make build CGO_ENABLED=0 GOOS=linux
 
 FROM alpine:3.17
 
