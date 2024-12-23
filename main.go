@@ -29,7 +29,7 @@ func main() {
 	flag.Parse()
 
 	if err := runProxying(localAddr, sentinelAddr, masterName, masterResolveRetries); err != nil {
-		log.Fatalln(err)
+		log.Fatalf("Fatal: %s", err)
 	}
 	log.Println("Exiting...")
 }
@@ -47,14 +47,13 @@ func runProxying(localAddr, sentinelAddr, masterName string, masterResolveRetrie
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error { return masterAddrResolver.UpdateMasterAddressLoop(ctx) })
 	eg.Go(func() error { return rsp.Run(ctx) })
-
 	return eg.Wait()
 }
 
 func resolveTCPAddr(addr string) *net.TCPAddr {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", addr)
 	if err != nil {
-		log.Fatalf("Failed resolving tcp address: %s", err)
+		log.Fatalf("Fatal - Failed resolving tcp address: %s", err)
 	}
 	return tcpAddr
 }

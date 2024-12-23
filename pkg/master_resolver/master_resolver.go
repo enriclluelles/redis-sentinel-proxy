@@ -91,6 +91,7 @@ func (r *RedisMasterResolver) initialMasterAdressResolve() error {
 
 func redisMasterFromSentinelAddr(sentinelAddress *net.TCPAddr, masterName string) (*net.TCPAddr, error) {
 	conn, err := utils.TCPConnectWithTimeout(sentinelAddress.String())
+	conn.SetDeadline(time.Now().Add(time.Second))
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to sentinel: %w", err)
 	}
